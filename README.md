@@ -37,6 +37,12 @@ client.on('remote', function(remote) {
 });
 ```
 
+# ToDo #
+
+* Support sync functions that don't return a stream.
+* Support async functions that return a stream via callback.
+
+
 # License #
 
 MIT
