@@ -1,0 +1,22 @@
+{
+  "name": "rpc-multistream",
+  "version": "0.0.1",
+  "description": "Similar to rpc-stream but remote functions can return streams.",
+  "homepage": "http://github.com/juul/rpc-multistream",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/juul/rpc-multistream.git"
+  },
+  "dependencies": {
+    "mux-demux": "~3.7.8",
+    "rpc-stream": "~1.0.5"
+  },
+  "author": {
+    "name": "Marc Juul",
+    "email": "juul@sudomesh.org"
+  },
+  "readmeFilename": "README.md",
+  "bugs": {
+    "url": "https://github.com/juul/rpc-multistream/issues"
+  }
+}
