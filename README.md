@@ -1,7 +1,8 @@
 
 rpc-multistream is similar to [rpc-stream](https://github.com/dominictarr/rpc-stream) but has support for remote functions that return streams like [multilevel](https://github.com/juliangruber/multilevel) and works without telling the client which remote functions are available like [dnode](https://github.com/substack/dnode). 
 
-rpc-multistream uses [rpc-stream](https://github.com/dominictarr/rpc-stream) and [mux-demux](https://github.com/dominictarr/mux-demux) and borrows some code from [multilevel](https://github.com/juliangruber/multilevel).
+rpc-multistream uses [mux-demux](https://github.com/dominictarr/mux-demux), a slighty tweaked version of [rpc-stream](https://github.com/juul/rpc-stream) and borrows some code from [multilevel](https://github.com/juliangruber/multilevel).
+
 
 # Usage #
 

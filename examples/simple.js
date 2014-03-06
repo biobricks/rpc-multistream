@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-var util = require('util');
 var fs = require('fs');
-var rpc = require('rpc-multistream');
+var rpc = require('../index.js');
 
 var server = rpc({
     foo: rpc.readable(function() {

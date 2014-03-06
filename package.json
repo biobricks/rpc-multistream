@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "mux-demux": "~3.7.8",
-    "rpc-stream": "~1.0.5"
+    "rpc-stream-alt": "git://github.com/juul/rpc-stream.git"
   },
   "author": {
     "name": "Marc Juul",
