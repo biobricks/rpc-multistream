@@ -6,7 +6,7 @@ rpc-multistream uses [mux-demux](https://github.com/dominictarr/mux-demux), a sl
 
 # Usage #
 
-```
+```Javascript
 var fs = require('fs');
 var rpc = require('rpc-multistream');
 
