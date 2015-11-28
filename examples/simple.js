@@ -1,30 +1,28 @@
 #!/usr/bin/env node
 
-var fs = require('fs');
+// Simple rpc-multistream example showing asynchronous calling
+
 var rpc = require('../index.js');
 
 var server = rpc({
-    foo: rpc.readable(function() {
-        return fs.createReadStream('foo.txt');
-    }),
-    bar: function(cb) {
-        console.log("bar called");
-        cb(null, "bar says hi");
+
+    foo: function(str, cb) {
+        str = str.toUpperCase();
+        cb(null, str);
     }
+
 });
 
 var client = rpc();
 
-client.pipe(server).pipe(client)
+client.pipe(server).pipe(client);
+
+client.connect();
 
 client.on('remote', function(remote) {
 
-    var stream = remote.foo();
-    stream.on('data', function(data) {
-        console.log(data);
+    remote.foo("rose", function(err, msg) {
+        console.log("Remote said: " + msg);
     });
 
-    remote.bar(function(err, msg) {
-        console.log(msg);
-    });
 });
