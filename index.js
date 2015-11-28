@@ -24,9 +24,9 @@ var jsonStream = require('duplex-json-stream');
 
   ['streamId', objectMode, 'encoding']
 
-  or it can be a string:
+  or just
 
-  'streamId'
+  ['streamId']
 
   and for all undefined stream options, 
   the values from the rpc-multiplex opts are used.
@@ -110,7 +110,7 @@ function rpcMultiStream(methods, opts) {
         // TODO implement detectStreamType
         detectStreamType: true, // detect if streams are readable/writeable/duplex
         encoding: 'utf8', // default encoding for streams
-        objectMode: true, // default objectMode for streams
+        objectMode: false, // default objectMode for streams
         explicit: false, // include encoding/objectMode even if they match defaults
         flattenError: flattenError,
         expandError: expandError,
@@ -162,6 +162,14 @@ function rpcMultiStream(methods, opts) {
 
     // --- functions below
 
+    function inc(count) {
+        count += 2;
+        if(count >= 9007199254740991) {
+            count = (isEven) ? 2 : 1; // this will almost certainly never happen
+        }
+        return count;
+    }
+
     function restoreCallbackArgs(args, cbArgs) {
         var i;
         for(i in cbArgs) {
@@ -169,32 +177,43 @@ function rpcMultiStream(methods, opts) {
         }
     }
 
-    function restoreStreamArgs(args, streamArgs) {
-        var i, arg, id, type, sopts;
-        for(i in streamArgs) {
-            arg = streamArgs[i];
-            sopts = {
-                encoding: opts.encoding,
-                objectMode: opts.objectMode
-            };
-            type = 'd';
-            if(!(arg instanceof Array)) {
-                id = parseInt(arg);
-            } else {
-                id = parseInt(arg.shift());
-                if(typeof arg[0] === 'string') {
-                    type = arg.shift();
-                }
-                if(typeof arg[0] === 'boolean') {
-                    sopts.objectMode = arg[0];
-                }
-                if(typeof arg[1] === 'string') {
-                    sopts.encoding = arg[1];
-                }
-            }
-            if(!id) throw new Error("Non-numeric stream id");
-            args[i] = makeStream(id, type, sopts);
+    function streamFromDesc(desc) {
+        var id;
+        var sopts = {
+            encoding: opts.encoding,
+            objectMode: opts.objectMode
+        };
+        var type = 'd';
+        id = parseInt(desc.shift());
+        if(typeof desc[0] === 'string') {
+            type = desc.shift();
         }
+        if(typeof desc[0] === 'boolean') {
+            sopts.objectMode = desc[0];
+        }
+        if(typeof desc[1] === 'string') {
+            sopts.encoding = desc[1];
+        }
+        if(!id) throw new Error("Non-numeric stream id");
+        return makeStream(id, type, sopts);
+    }
+
+    function restoreStreamArgs(args, streamDescs) {
+        var i;
+        for(i in streamDescs) {
+            args[i] = streamFromDesc(streamDescs[i])
+        }
+    }
+
+    function restoreRetStreams(streamDescs) {
+        var ret = [];
+        var i, desc;
+        for(i=0; i < streamDescs.length; i++) {
+            desc = streamDescs[i];
+            ret.push(streamFromDesc(desc));
+            streamCount = inc(streamCount);
+        }
+        return ret;
     }
 
     // errors that have no means of being reported
@@ -220,7 +239,10 @@ function rpcMultiStream(methods, opts) {
         var args = data[1] || [];
         var cbArgs = data[2];
         var streamArgs = data[3];
-        var retStreams = data[4];
+        var retStreamDescs = data[4];
+
+        var retStreams;
+        var i;
 
         try {
             // expand errors only for first argument to callback
@@ -233,8 +255,35 @@ function rpcMultiStream(methods, opts) {
             if(cbArgs) restoreCallbackArgs(args, cbArgs);
             if(streamArgs) restoreStreamArgs(args, streamArgs);
 
+            if(retStreamDescs && retStreamDescs.length) {
+                if(!(retStreamDescs[0] instanceof Array)) {
+                    retStreamDescs = [retStreamDescs];
+                }
+                retStreams = restoreRetStreams(retStreamDescs);
+            }
 
             var ret = fn.apply(methods, args);
+            if(!(ret instanceof Array)) ret = [ret];
+
+            if(retStreams) {
+                var type;
+                for(i=0; i < retStreams.length; i++) {
+                    if(!ret[i]) continue;
+                    type = retStreamDescs[i].type;
+                    if(type === 'r') {
+         // TODO switch back to pump
+                        ret[i].pipe(retStreams[i]);
+//                        pump(ret[i], retStreams[i]);
+                    } else if(type === 'w') {
+                        retStreams[i].pipe(ret[i]);
+//                        pump(retStreams[i], ret[i]);
+                    } else { // duplex
+                        ret[i].pipe(retStreams[i]).pipe(ret[i]);
+//                        pump(ret[i], retStreams[i], ret[i]);
+                    }
+                }
+            }
+
         } catch(err) {
             // if last argument is a function then assume it's the main callback
             // and call it with the error as only argument
@@ -262,7 +311,7 @@ function rpcMultiStream(methods, opts) {
     function makeStream(id, type, opts) {
         if(typeof type === 'object') {
             opts = type;
-            type = 'duplex';
+            type = 'd';
         }
         opts = opts || {};
 
@@ -290,7 +339,16 @@ function rpcMultiStream(methods, opts) {
         };
         var name;
         for(name in methods) {
-            manifest[name] = methods[name]._rpcType || 'async';
+            if(methods[name]._rpcOpts) {
+                methods[name]._rpcOpts = xtend(methods[name]._rpcOpts, {
+                    encoding: opts.encoding,
+                    objectMode: opts.objectMode,
+                    type: 'd'
+                });
+                manifest[name] = methods[name]._rpcOpts;
+            } else {
+                manifest[name] = 'async';
+            }
         }
         return manifest;
     }
@@ -325,9 +383,6 @@ function rpcMultiStream(methods, opts) {
             id.push(sopts.encoding);
         }
 
-        if(id.length === 1) {
-            return streamId
-        }
         return id;
     }
     
@@ -344,11 +399,7 @@ function rpcMultiStream(methods, opts) {
             streams[streamCount] = stream;
             mapping[i] = streamIdentifier(streamCount, type, opts);
             args[i] = null;
-            streamCount += 2;
-            if(streamCount >= 9007199254740992) {
-                // this will almost certainly never happen
-                streamCount = (isEven) ? 2 : 1;
-            }
+            streamCount = inc(streamCount);;
             if(type === 'r') {
                 // TODO what to do on error here?
                 pump(s, stream);
@@ -372,10 +423,7 @@ function rpcMultiStream(methods, opts) {
             callbacks[cbCount] = cb
             mapping[i] = cbCount;
             args[i] = null;
-            cbCount += 2;
-            if(cbCount >= 9007199254740991) {
-                cbCount = (isEvent) ? 2 : 1; // this will almost certainly never happen
-            }
+            cbCount = inc(cbCount);
         }
         if(!Object.keys(mapping).length) return null;
         return mapping;
@@ -386,24 +434,21 @@ function rpcMultiStream(methods, opts) {
         var ids = [];
         var retStreams = [];
         
-        var i, type, opts, stream;
+        var i, type, sopts, stream;
         for(i=0; i < streamOpts.length; i++) {
-            opts = {
-                objectMode: streamOpts[i].objectMode,
-                encoding: streamOpts[i].encoding
+            sopts = {
+                objectMode: (typeof streamOpts[i].objectMode === 'boolean') ? streamOpts[i].objectMode : opts.objectMode,
+                encoding: streamOpts[i].encoding || opts.encoding
             };
             type = streamOpts[i].type || 'd';
 
-            ids.push(streamIdentifier(streamCount, type, opts));
+            ids.push(streamIdentifier(streamCount, type, sopts));
 
-            stream = makeStream(streamCount, type, opts);
+            stream = makeStream(streamCount, type, sopts);
             retStreams.push(stream);
             streams[streamCount] = stream;
 
-            streamCount++;
-            if(streamCount >= 9007199254740991) {
-                streamCount = 1; // this will almost certainly never happen
-            }
+            streamCount = inc(streamCount);
         }
         return {
             ids: (ids.length > 1) ? ids : ids[0],
@@ -435,6 +480,8 @@ function rpcMultiStream(methods, opts) {
                 if(!(retStreamOpts instanceof Array)) {
                     retStreamOpts = [retStreamOpts];
                 }
+                if(!cbMapping) msg.push({});
+                if(!streamMapping) msg.push({});
                 var ret = registerReturnStreams(retStreamOpts);
                 msg.push(ret.ids);
                 rpcStream.write(msg);
@@ -505,52 +552,43 @@ function rpcMultiStream(methods, opts) {
             sendMeta('manifest', manifest);
         }
     };
-
-    multiplex.syncStream = function(fn, sopts) {
-        sopts = sopts || {};
-        if(!(sopts instanceof Array)) {
-            sopts = [sopts];
-        }
-        var i;
-        for(i=0; i < sopts.length; i++) {
-            sopts[i] = xtend(sopts[i], {
-                encoding: opts.encoding,
-                objectMode: opts.objectMode,
-                type: 'duplex'
-            });
-        }
-        Object.defineProperty(
-            fn, 
-            '_rpcOpts', 
-            {enumerable: false, value: sopts}
-        );
-
-        return fn;
-    };
-
-    multiplex.syncDuplexStream = function(fn, opts) {
-        opts = opts || {};
-        opts.type = 'duplex';
-        return multiplex.syncStream(fn, opts);
-    };
-
-    multiplex.syncReadStream = function(fn, opts) {
-        opts = opts || {};
-        opts.type = 'read';
-        return multiplex.syncStream(fn, opts);
-    };
-
-    multiplex.syncWriteStream = function(fn, opts) {
-        opts = opts || {};
-        opts.type = 'write';
-        return multiplex.syncStream(fn, opts);
-    };
-
     
     return multiplex;
 }
 
 
+rpcMultiStream.syncStream = function(fn, sopts) {
+    sopts = sopts || {};
+    if(!(sopts instanceof Array)) {
+        sopts = [sopts];
+    }
+    Object.defineProperty(
+        fn, 
+        '_rpcOpts', 
+        {enumerable: false, value: sopts}
+    );
+    
+    return fn;
+};
+
+
+rpcMultiStream.syncDuplexStream = function(fn, opts) {
+    opts = opts || {};
+    opts.type = 'd';
+    return rpcMultiStream.syncStream(fn, opts);
+};
+
+rpcMultiStream.syncReadStream = function(fn, opts) {
+    opts = opts || {};
+    opts.type = 'r';
+    return rpcMultiStream.syncStream(fn, opts);
+};
+
+rpcMultiStream.syncWriteStream = function(fn, opts) {
+    opts = opts || {};
+    opts.type = 'w';
+    return rpcMultiStream.syncStream(fn, opts);
+};
 
 
 
