@@ -505,14 +505,51 @@ function rpcMultiStream(methods, opts) {
             sendMeta('manifest', manifest);
         }
     };
+
+    multiplex.syncStream = function(fn, sopts) {
+        sopts = sopts || {};
+        if(!(sopts instanceof Array)) {
+            sopts = [sopts];
+        }
+        var i;
+        for(i=0; i < sopts.length; i++) {
+            sopts[i] = xtend(sopts[i], {
+                encoding: opts.encoding,
+                objectMode: opts.objectMode,
+                type: 'duplex'
+            });
+        }
+        Object.defineProperty(
+            fn, 
+            '_rpcOpts', 
+            {enumerable: false, value: sopts}
+        );
+
+        return fn;
+    };
+
+    multiplex.syncDuplexStream = function(fn, opts) {
+        opts = opts || {};
+        opts.type = 'duplex';
+        return multiplex.syncStream(fn, opts);
+    };
+
+    multiplex.syncReadStream = function(fn, opts) {
+        opts = opts || {};
+        opts.type = 'read';
+        return multiplex.syncStream(fn, opts);
+    };
+
+    multiplex.syncWriteStream = function(fn, opts) {
+        opts = opts || {};
+        opts.type = 'write';
+        return multiplex.syncStream(fn, opts);
+    };
+
     
     return multiplex;
 }
 
-rpcMultiStream.prototype.syncStream = function(fn) {
-    // TODO
-    multiplex.createSharedStream;
-};
 
 
 
