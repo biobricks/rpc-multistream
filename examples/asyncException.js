@@ -19,11 +19,9 @@ var client = rpc();
 
 client.pipe(server).pipe(client);
 
-client.connect();
+client.on('methods', function(methods) {
 
-client.on('remote', function(remote) {
-
-    remote.foo(function(err) {
+    methods.foo(function(err) {
 
         if(err) {
             console.log("Remote error:", err.message);

@@ -47,19 +47,17 @@ var client = rpc();
 
 client.pipe(server).pipe(client);
 
-client.connect();
+client.on('methods', function(methods) {
 
-client.on('remote', function(remote) {
-
-    remote.bar(function(err, msg, r) {
+    methods.bar(function(err, msg, r) {
         console.log("client got: " + msg);
         r.pipe(process.stdout);
 
-        remote.foo('haha.txt', function(err, w) {
+        methods.foo('haha.txt', function(err, w) {
             w.write("woop!");
             w.end();
 
-            remote.baz('cookie-cat.txt', function(err, r, w, msg) {
+            methods.baz('cookie-cat.txt', function(err, r, w, msg) {
                 console.log("remote said:", msg);
                 r.on('data', function(data) {
                     console.log("ReadStream: " + data);
@@ -67,7 +65,7 @@ client.on('remote', function(remote) {
                 w.write("a treat for your tummy!");
                 w.end();
 
-                remote.duper(function(err, dupStream) {
+                methods.duper(function(err, dupStream) {
 
 
                     console.log("Returned");

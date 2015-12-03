@@ -7,6 +7,13 @@ var xtend = require('xtend');
 var jsonStream = require('duplex-json-stream');
 
 /*
+  Below is some documentation for the message format used for RPC calls. 
+  An even better way to learn this is to set debug to true which will
+  print every message to stdout. Like so:
+
+    var rpc = require('rpc-multistream');
+    var myRpc = rpc({ ... }, {debug: true});
+
   rpcStream message format:
   
   ['functionNameOrCallbackId', [functionArgs], {indexOfCallbackArg1: 'callback1Id', indexOfCallbackArg2: 'callback2Id'}, {indexOfStreamArg1: stream1Identifier, indexOfStreamArg2: stream2Identifier}, returnStreamIdenfifier]
@@ -79,22 +86,18 @@ function flattenError(err) {
     if(!(err instanceof Error)) return err;
     var err2 = {
         message: err.message
-        };
-    Object.defineProperty(
-        err2, 
-        '_isErrorObject',
-        {enumerable: false, value: true}
-    );
-    
+    };
+    err2._isErrorObject = true;
+
     for(var k in err) {
         err2[k] = err[k] 
     }
-        return err2
+    return err2
 };
 
 function expandError(err) {
     if (!err || !err._isErrorObject) return err
-    var err2 = new Error(err.message)
+    var err2 = new Error(err.message);
     for(var k in err) {
         err2[k] = err[k]
     }
@@ -103,7 +106,7 @@ function expandError(err) {
 
 
 function rpcMultiStream(methods, opts) {
-    opts = xtend((opts || {}), {
+    opts = xtend({
         init: true, // automatically send rpc methods manifest on instantiation
         // TODO implement detectEncoding
         detectEncoding: true, // detect encoding and objectMode for streams
@@ -112,14 +115,18 @@ function rpcMultiStream(methods, opts) {
         encoding: 'utf8', // default encoding for streams
         objectMode: false, // default objectMode for streams
         explicit: false, // include encoding/objectMode even if they match defaults
+        debug: false,
         flattenError: flattenError,
         expandError: expandError,
-        onError: function(err) {
+        onError: function(err, functionName, multiplex, metaStream) {
             // emit error both on local and remote sides
-            multiplex.emit('error', err);
-            metaStream.write('error', flattenError(err));
+            multiplex.emit('error', err, false, functionName);
+            if(typeof opts.flattenError === 'function') {
+                err = opts.flattenError(err);
+            }
+            metaStream.write(['error', {err: err, functionName: functionName}]);
         }
-    });
+    }, (opts || {}));
 
     var diceRoll = uuid();
     var isEven;
@@ -178,6 +185,7 @@ function rpcMultiStream(methods, opts) {
     }
 
     function streamFromDesc(desc) {
+        desc = desc.slice(0); // clone
         var id;
         var sopts = {
             encoding: opts.encoding,
@@ -218,14 +226,21 @@ function rpcMultiStream(methods, opts) {
 
     // errors that have no means of being reported
     // to the remote end will be sent here
-    function uncaughtError(err) {
+    function uncaughtError(err, functionName) {
         if(typeof opts.onError === 'function') {
-            return opts.onError(err);
+            return opts.onError(err, functionName, multiplex, metaStream);
         }
-        console.error(err);
+    }
+
+    function debug() {
+        if(!opts.debug) return;
+        var args = [].slice.call(arguments);
+        args = ['['+moduleName+' debug]'].concat(args);
+        console.log.apply(null, args);
     }
 
     function handleRPC(data) {
+        debug("receiving on rpcStream:", data);
         var fn;
         var cbi = parseInt(data[0]);
         if(cbi) {
@@ -269,9 +284,10 @@ function rpcMultiStream(methods, opts) {
                 var type;
                 for(i=0; i < retStreams.length; i++) {
                     if(!ret[i]) continue;
-                    type = retStreamDescs[i].type;
+
+                    type = retStreamDescs[i][1];
                     if(type === 'r') {
-         // TODO switch back to pump
+                        // TODO switch to pump
                         ret[i].pipe(retStreams[i]);
 //                        pump(ret[i], retStreams[i]);
                     } else if(type === 'w') {
@@ -288,18 +304,31 @@ function rpcMultiStream(methods, opts) {
             // if last argument is a function then assume it's the main callback
             // and call it with the error as only argument
             if(args.length && typeof args[args.length-1] === 'function') {
+                if(typeof opts.flattenError === 'function') {
+                    err = opts.flattenError(err);
+                }
                 args[args.length-1].call(methods, err);
 
-            // TODO emit error on each retStream if no callback?
-            // maybe have to send that over the metaStream (or rpcStream)
-            } else { 
-                uncaughtError(err);
+            // if we have at least one stream then we use that to report the error
+            } else if(retStreams && retStreams.length) { 
+                if(typeof opts.flattenError === 'function') {
+                    err = opts.flattenError(err);
+                }
+                var reported = false;
+                var streamId;
+                for(i=0; i < retStreams.length; i++) {
+                    streamId = retStreamDescs[i][0];
+                    metaStream.write(['streamError', {streamId: streamId, functionName: name, err: err}]);
+                    // destroy streams that didn't get connected
+                    if(!ret || !ret[i]) {
+                        retStreams[i].destroy();
+                    }
+                }
+            } else {
+                uncaughtError(err, name);
             }
-            // TODO destroy all stream args and retStreams
             return;
         }
-
-        // TODO handle return values
     }
 
     /*
@@ -340,11 +369,11 @@ function rpcMultiStream(methods, opts) {
         var name;
         for(name in methods) {
             if(methods[name]._rpcOpts) {
-                methods[name]._rpcOpts = xtend(methods[name]._rpcOpts, {
+                methods[name]._rpcOpts = xtend({
                     encoding: opts.encoding,
                     objectMode: opts.objectMode,
                     type: 'd'
-                });
+                }, methods[name]._rpcOpts);
                 manifest[name] = methods[name]._rpcOpts;
             } else {
                 manifest[name] = 'async';
@@ -468,14 +497,13 @@ function rpcMultiStream(methods, opts) {
                 if(parseInt(name) && typeof opts.flattenError === 'function') {
                     args[0] = opts.flattenError(args[0]);
                 }
-                msg.push(args);
             }
+            msg.push(args);
             if(cbMapping) msg.push(cbMapping);
             if(streamMapping) {
                 if(!cbMapping) msg.push({});
                 msg.push(streamMapping);
             }
-            
             if(retStreamOpts && retStreamOpts !== 'async') {
                 if(!(retStreamOpts instanceof Array)) {
                     retStreamOpts = [retStreamOpts];
@@ -484,10 +512,11 @@ function rpcMultiStream(methods, opts) {
                 if(!streamMapping) msg.push({});
                 var ret = registerReturnStreams(retStreamOpts);
                 msg.push(ret.ids);
+                debug("sending on rpcStream:", msg);
                 rpcStream.write(msg);
                 return ret.streams;
             }
-
+            debug("sending on rpcStream:", msg);
             rpcStream.write(msg);
         }
     }
@@ -524,10 +553,13 @@ function rpcMultiStream(methods, opts) {
     }
   
     function sendMeta(msgType, msg) {
-        metaStream.write([msgType, msg]);
+        var out = [msgType, msg];
+        debug("sending on metaStream:", out);
+        metaStream.write(out);
     }
 
     function handleMeta(data) {
+        debug("receiving on metaStream:", data);
         if(!(data instanceof Array)|| data.length < 2) return;
         var msgType = data[0];
         var msg = data[1];
@@ -538,8 +570,20 @@ function rpcMultiStream(methods, opts) {
         case 'manifest':
             gotManifest(msg);
             break;
-        case 'error':
-            multiplex.emit('error', "Remote error: " + msg.message || msg);
+        case 'streamError': // error to be emitted on a stream
+            var s = streams[msg.streamId];
+            if(s) {
+                if(typeof opts.expandError === 'function') {
+                    msg.err = opts.expandError(msg.err);
+                }
+                s.emit('error', msg.err, true, msg.functionName);
+                break;
+            }
+        case 'error': // error that had no callback or stream for getting reported
+            if(typeof opts.expandError === 'function') {
+                msg.err = opts.expandError(msg.err);
+            }
+            multiplex.emit('error', msg.err, true, msg.functionName);
             break;
         default:
             multiplex.emit('error', "Unknown meta message type: " + msgType);
@@ -557,10 +601,29 @@ function rpcMultiStream(methods, opts) {
 }
 
 
-rpcMultiStream.syncStream = function(fn, sopts) {
+rpcMultiStream.syncStream = function(fn, sopts, type) {
     sopts = sopts || {};
+    type = type || 'd';
+    var i, a;
+    if(typeof sopts === 'number') {
+        a = [];
+        for(i=0; i < sopts; i++) {
+            a.push({type: type});
+        }
+        sopts = a;
+    }
     if(!(sopts instanceof Array)) {
         sopts = [sopts];
+    }
+    for(i=0; i < sopts.length; i++) {
+        sopts[i].type = sopts[i].type || type;
+        if(sopts[i].type === 'read') {
+            sopts[i].type = 'r';
+        } else if(sopts[i].type === 'write') {
+            sopts[i].type = 'w';
+        } else if(sopts[i].type === 'duplex') {
+            sopts[i].type = 'd';
+        }
     }
     Object.defineProperty(
         fn, 
@@ -572,22 +635,14 @@ rpcMultiStream.syncStream = function(fn, sopts) {
 };
 
 
-rpcMultiStream.syncDuplexStream = function(fn, opts) {
-    opts = opts || {};
-    opts.type = 'd';
-    return rpcMultiStream.syncStream(fn, opts);
-};
-
 rpcMultiStream.syncReadStream = function(fn, opts) {
     opts = opts || {};
-    opts.type = 'r';
-    return rpcMultiStream.syncStream(fn, opts);
+    return rpcMultiStream.syncStream(fn, opts, 'r');
 };
 
 rpcMultiStream.syncWriteStream = function(fn, opts) {
     opts = opts || {};
-    opts.type = 'w';
-    return rpcMultiStream.syncStream(fn, opts);
+    return rpcMultiStream.syncStream(fn, opts, 'w');
 };
 
 

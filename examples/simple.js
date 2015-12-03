@@ -17,11 +17,9 @@ var client = rpc();
 
 client.pipe(server).pipe(client);
 
-client.connect();
+client.on('methods', function(methods) {
 
-client.on('remote', function(remote) {
-
-    remote.foo("rose", function(err, msg) {
+    methods.foo("rose", function(err, msg) {
         console.log("Remote said: " + msg);
     });
 

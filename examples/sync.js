@@ -11,7 +11,7 @@ var outFile = "/tmp/test.out";
 
 var server = rpc({
 
-    foo: rpc.sync(function() {
+    foo: rpc.syncReadStream(function() {
         return fs.createReadStream('foo.txt', {encoding: 'utf8'});
     }),
 
@@ -36,21 +36,19 @@ var client = rpc();
 
 client.pipe(server).pipe(client);
 
-client.on('remote', function(remote) {
-    var inStream = remote.foo();
+client.on('methods', function(methods) {
+    var inStream = methods.foo();
     inStream.pipe(process.stdout);
 
-    var outStream = remote.bar(outFile);
+    var outStream = methods.bar(outFile);
     outStream.write("Love!\n");
     outStream.end();
     console.log("Wrote to", outFile);
 
-    var duplexStream = remote.baz();
+    var duplexStream = methods.baz();
     duplexStream.on('data', function(data) {
         console.log("Duplex got:", data);
     });
     duplexStream.write("some data I sent to the duplex stream\n");
 
 });
-
-client.connect();
