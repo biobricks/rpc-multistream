@@ -181,10 +181,10 @@ If using synchronous calls then both RPC server and client cannot be in the same
 * Automatically close irrelevant ends of read/write streams
 
 * More examples:
-** Multiple-callbacks per call
-** Binary stream
-** Async call with multiple streams + client sending stream to server
-** Calling remote callbacks from remote callbacks (turtles)
+* Multiple-callbacks per call
+* Binary stream
+* Async call with multiple streams + client sending stream to server
+* Calling remote callbacks from remote callbacks (turtles)
 
 # Copyright and license
 
