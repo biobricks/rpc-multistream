@@ -7,7 +7,7 @@ rpc-multistream is similar to [rpc-stream](https://github.com/dominictarr/rpc-st
 * Have infinite remote callback chains (like [dnode](https://github.com/substack/dnode))
 * Mix and match efficient binary streams with text and objectMode streams.
 
-rpc-multistream uses [multiplex](https://github.com/maxogden/multiplex) under the hood.
+rpc-multistream uses streams2 and [multiplex](https://github.com/maxogden/multiplex) under the hood, so is efficient for binary streams.
 
 If you need authentication then check out [rpc-multiauth](https://github.com/biobricks/rpc-multiauth).
 
