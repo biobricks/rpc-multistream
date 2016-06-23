@@ -31,7 +31,7 @@ var client = rpc();
 
 client.pipe(server).pipe(client)
 
-client.on('remote', function(remote) {
+client.on('methods', function(remote) {
 
   var stream = remote.foo();
   stream.on('data', function(data) {

@@ -149,12 +149,14 @@ function rpcMultiStream(methods, opts) {
         cb();
     }), function(err) {
         // TODO handle error 
-        console.error("rpcStream error:", err);
+        console.error("metaStream error:", err);
     });
 
 
     pump(rpcStream, through.obj(function(data, enc, cb) {
-        if(!(data instanceof Array) || data.length < 1) return cb();
+        if(!(data instanceof Array) || data.length < 1) {
+            return cb();
+        }
         handleRPC(data)
         cb();
     }), function(err) {
@@ -236,7 +238,7 @@ function rpcMultiStream(methods, opts) {
         if(!opts.debug) return;
         var args = [].slice.call(arguments);
         args = ['['+moduleName+' debug]'].concat(args);
-        console.log.apply(null, args);
+        console.log.apply(console, args);
     }
 
     function handleRPC(data) {
@@ -354,6 +356,13 @@ function rpcMultiStream(methods, opts) {
         }
         if(opts.objectMode) {
             stream = jsonStream(stream);
+
+            // ToDo 
+            // duplex-json-stream throws an error when stream is closed
+            // if no error handler is set.
+            // What's the proper way of dealing with this?
+            // pump everything so errors propagate?
+            stream.on('error', function(err) {}); 
         }
         return stream;
     };
@@ -512,11 +521,11 @@ function rpcMultiStream(methods, opts) {
                 if(!streamMapping) msg.push({});
                 var ret = registerReturnStreams(retStreamOpts);
                 msg.push(ret.ids);
-                debug("sending on rpcStream:", msg);
+                debug("sending on rpcStream:", typeof msg, msg);
                 rpcStream.write(msg);
                 return ret.streams;
             }
-            debug("sending on rpcStream:", msg);
+                debug("sending on rpcStream:", typeof msg, msg);
             rpcStream.write(msg);
         }
     }
