@@ -148,10 +148,8 @@ function rpcMultiStream(methods, opts) {
         handleMeta(data);
         cb();
     }), function(err) {
-        // TODO handle error 
-        console.error("metaStream error:", err);
+        multiplex.emit('error', err);
     });
-
 
     pump(rpcStream, through.obj(function(data, enc, cb) {
         if(!(data instanceof Array) || data.length < 1) {
@@ -160,8 +158,7 @@ function rpcMultiStream(methods, opts) {
         handleRPC(data)
         cb();
     }), function(err) {
-        // TODO handle error 
-        console.error("rpcStream error:", err);
+        multiplex.emit('error', err);
     });
 
 
