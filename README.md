@@ -13,7 +13,7 @@ If you need authentication then check out [rpc-multiauth](https://github.com/bio
 
 # Usage 
 
-```
+```javascript
 var fs = require('fs');
 var rpc = require('rpc-multistream');
 
@@ -48,7 +48,7 @@ client.on('methods', function(remote) {
 
 These are are the defaults:
 
-```
+```javascript
 rpc({ ...methods... }, { 
 
   init: true, // automatically send rpc methods manifest on instantiation
@@ -76,7 +76,7 @@ For synchronous calls that return one or more streams, an 'error' event is emitt
 
 By setting flattenError and expandError you can change how rpc-multistream serializes and deserializes error objects. The default results in an Error object with the original .message intact to be re-created on the remote end. Disable by setting both to false or overwrite with your own like so:
 
-```
+```javascript
 var rpc = require('rpc-multistream');
 
 var endpoint = rpc({ ... some methods ... }, {
@@ -93,7 +93,7 @@ var endpoint = rpc({ ... some methods ... }, {
 
 Orphaned errors are errors where neither a callback nor a stream exists that can be used to report the error back to the caller. The default action is to emit an 'error' event on both ends of the parent rpc-multistream stream. Disable this by setting onError to false or overwrite with your own function like so:
 
-```
+```javascript
 var rpc = require('rpc-multistream');
 
 var endpoint = rpc({ ... some methods ... }, {
@@ -113,7 +113,7 @@ If you declare a function with no wrapper then rpc-multistream assumes that is i
 
 It is also possible to define functions that directly return only a stream by wrapping your functions using e.g:
 
-```
+```javascript
 var server = rpc({
   foo: rpc.syncReadStream(function() {
     return fs.createReadStream('foo.txt');
@@ -133,7 +133,7 @@ It is _not_ possible to define synchronous functions that return something other
 
 For synchronous functions remote errors are reported via the returned stream emitting an error. This is true even if an exception occurs before the remote stream has been created. Here's how it works:
 
-```
+```javascript
 var server = rpc({
   myFunc: rpc.syncReadStream(function() {
     throw new Error("I am an error!");
@@ -154,7 +154,7 @@ For streams returned via callbacks it will be auto-detected whether the stream i
 
 For streams returned via synchronous-style calling there is no way to know in advance what the remote stream options are going to be. If you do not specify any options then the encoding and objectMode from the parent rpc-multistream options will be used. To explicitly specify:
 
-```
+```javascript
 var server = rpc({
   foo: rpc.syncReadStream(function() {
     return fs.createReadStream('foo.txt');
