@@ -23,5 +23,8 @@
   "readmeFilename": "README.md",
   "bugs": {
     "url": "https://github.com/biobricks/rpc-multistream/issues"
+  },
+  "scripts": {
+    "test": "node_modules/.bin/tape tests/*.js"
   }
 }
