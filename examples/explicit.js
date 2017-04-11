@@ -1,6 +1,7 @@
 #!/usr/bin/env nodejs
 
-// Example of synchronous calling using rpc-multistream
+// Example of using opts.explicit 
+// Try turning off opts.explicit on the client and see it fail
 
 var fs = require('fs');
 var from = require('from2');
