@@ -55,6 +55,8 @@ rpc({ ...methods... }, {
   encoding: 'utf8', // default encoding for streams
   objectMode: false, // default objectMode for streams
   explicit: true, // include encoding/objectMode even if they match defaults
+  heartbeat: 0, // how often to send heartbeat. 0 disables
+  maxMissedBeats: 3.5, // die after missing this many heartbeats
   debug: false, // Enable debug output
   flattenError: <function_or_false>, // function for serializing errors, or false
   expandError: <function>, // function for deserializing errors, or false
@@ -66,7 +68,13 @@ If you set init to false then the list of functions will not be sent and the rem
 
 The encoding and objectMode options will be used as for streams returned by synchronous-style calls unless you explicity define these per-stream. If you set the encoding and objectMode options to the same on both ends then all streams that have these options will forego sending the options across the stream, saving you bandwidth. If you don't set encoding and objectMode to the same on both ends then you _must_ set explicit to true (the default), which turns off this bandwidth-saving feature.
 
-For the error-related options see the next section.
+# Heartbeat
+
+If `opts.heartbeat` is set to a positive integer then a heartbeat message will be sent out every `opts.heartbeat` milliseconds. The other endpoint will respond to this message immediately. Note that you need not enable heartbeat on both endpoints, though you can if you want the redundancy. When a heartbeat response is received then a 'heartbeat' event is emitted. If longer than `opts.heartbeat` * `opts.maxMissedBeats` passes without a heartbeat response, then at the next heartbeat interval a 'death' event is emitted. This does not affect any other behaviour and it is up to the user of this module to act on the death event. 
+
+The heartbeat can be started or restarted after initialization with `.revive()` (which takes the same two heartbeat opts as the constructor). The heartbeat can be stopped with `.die()` and `.playDead(true/false)` can be used to stop/start responding to heartbeat requests. 
+
+See `examples/heartbeat.js` for an example.
 
 # Error handling
 
@@ -172,7 +180,7 @@ Either both ends must agree on the following opts (as passed to rpc-multistream)
 * encoding
 * objectMode
 
-or you must set explicit to true. Setting explicit to true will cost more bandwidth since each call will include stream options even if they match your defaults.
+or you must set explicit to true (the default). Setting explicit to true will cost more bandwidth since each call will include stream options even if they match your defaults.
 
 The streams returns by async callbacks are currently all duplex streams, no matter if the original stream on the remote side was only a read or write stream.
 
@@ -183,18 +191,16 @@ If using synchronous calls then both RPC server and client cannot be in the same
 * Implement opts.detectEncoding and opts.detectStreamType
 * Automatically close irrelevant ends of read/write streams
 * Use pump everywhere instead of .pipe
+* More unit tests
 
 ## More examples
 
 * Multiple-callbacks per call
-* Binary stream
 * Async call with multiple streams + client sending stream to server
 * Calling remote callbacks from remote callbacks (turtles)
 
 ## Ideas for future versions
 
-* Add heartbeat feature
-* Automatic reconnect (better to make this its own module)
 * Backpressure support
 
 # Copyright and license

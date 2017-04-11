@@ -116,6 +116,8 @@ function rpcMultiStream(methods, opts) {
         objectMode: false, // default objectMode for streams
         explicit: true, // include encoding/objectMode even if they match defaults
         debug: false,
+        heartbeat: 0, // send heartbeat every n ms. disable if falsy
+        maxMissedBeats: 3.5, // die after missing this many heartbeats
         flattenError: flattenError,
         expandError: expandError,
         onError: function(err, functionName, multiplex, metaStream) {
@@ -143,7 +145,31 @@ function rpcMultiStream(methods, opts) {
 
     var metaStream = makeStream('m', {objectMode: true});
     var rpcStream = makeStream('r', {objectMode: true});
+    var heartbeatStream = makeStream('h');
 
+    var playingDead = false;
+    var lastHeartbeat;
+    heartbeatStream.on('data', function(data) {
+      if(playingDead) return;
+      var found42 = false;
+      var found43 = !opts.heartbeat;
+      var i;
+      for(i=0; i < data.length; i++) {
+          if(found42 && found43) break;
+          if(!found42 && data[i] === 42) {
+              heartbeatStream.write(new Buffer([43]))
+              found42 = true;
+              continue;
+          }
+          if(!found43 && data[i] === 43) {
+              lastHeartbeat = new Date().getTime();
+              multiplex.emit('heartbeat', lastHeartbeat);
+              found43 = true;
+          }
+       }
+    });
+
+    // TODO any reason we can't just use .on('data') and .on('error') here?
     pump(metaStream, through.obj(function(data, enc, cb) {
         handleMeta(data);
         cb();
@@ -151,6 +177,7 @@ function rpcMultiStream(methods, opts) {
         multiplex.emit('error', err);
     });
 
+    // TODO any reason we can't just use .on('data') and .on('error') here?
     pump(rpcStream, through.obj(function(data, enc, cb) {
         if(!(data instanceof Array) || data.length < 1) {
             return cb();
@@ -160,6 +187,20 @@ function rpcMultiStream(methods, opts) {
     }), function(err) {
         multiplex.emit('error', err);
     });
+
+    function heartbeat() {
+        if(!opts.heartbeat) return;
+        if(lastHeartbeat && (new Date()).getTime() - lastHeartbeat > Math.ceil(opts.heartbeat * opts.maxMissedBeats)) {
+            multiplex.emit('death');
+            return;
+        }
+        heartbeatStream.write(new Buffer([42]));
+        setTimeout(heartbeat, opts.heartbeat);
+    }
+
+    if(opts.heartbeat) {
+        heartbeat();
+    }
 
 
     if(opts.init) {
@@ -604,6 +645,27 @@ function rpcMultiStream(methods, opts) {
             sendMeta('manifest', manifest);
         }
     };
+
+  // restart heartbeat
+  multiplex.revive = function(_opts) {
+    _opts = _opts || {};
+    if(_opts.heartbeat) opts.heartbeat = _opts.heartbeat;
+    if(_opts.maxMissedBeats) opts.maxMissedBeats = _opts.maxMissedBeats;
+    
+    lastHeartbeat = undefined;
+    
+    heartbeat();
+  };
+  
+  // stop sending heartbeat requests
+  multiplex.die = function() {
+    opts.heartbeat = undefined;
+  };
+  
+  // stop responding to heartbeats
+  multiplex.playDead = function(state) {
+    playingDead = (state === undefined) ? true : false;
+  };
     
     return multiplex;
 }
@@ -652,7 +714,6 @@ rpcMultiStream.syncWriteStream = function(fn, opts) {
     opts = opts || {};
     return rpcMultiStream.syncStream(fn, opts, 'w');
 };
-
 
 
 module.exports = rpcMultiStream;

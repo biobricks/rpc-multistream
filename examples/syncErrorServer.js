@@ -3,7 +3,7 @@
 // Example of error reporting for synchronous calling using rpc-multistream
 //
 // This example is split up into a server and a client since the error reporting
-// does not work correctly when both server and client run in the same proc
+// does not work correctly when both server and client run in the same process
 
 var fs = require('fs');
 var net = require('net');
