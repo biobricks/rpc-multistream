@@ -54,7 +54,7 @@ rpc({ ...methods... }, {
   init: true, // automatically send rpc methods manifest on instantiation
   encoding: 'utf8', // default encoding for streams
   objectMode: false, // default objectMode for streams
-  explicit: false, // include encoding/objectMode even if they match defaults
+  explicit: true, // include encoding/objectMode even if they match defaults
   debug: false, // Enable debug output
   flattenError: <function_or_false>, // function for serializing errors, or false
   expandError: <function>, // function for deserializing errors, or false
@@ -64,7 +64,7 @@ rpc({ ...methods... }, {
 
 If you set init to false then the list of functions will not be sent and the remote end will not emit a 'methods' event until you call rpc.init().
 
-The encoding and objectMode options will be used as for streams returned by synchronous-style calls unless you explicity define these per-stream. If you set the encoding and objectMode options to the same on both ends then all streams that have these options will forego sending the options across the stream, saving you bandwidth. If you don't set encoding and objectMode to the same on both ends then you _must_ set explicit to true, which turns off this bandwidth-saving feature.
+The encoding and objectMode options will be used as for streams returned by synchronous-style calls unless you explicity define these per-stream. If you set the encoding and objectMode options to the same on both ends then all streams that have these options will forego sending the options across the stream, saving you bandwidth. If you don't set encoding and objectMode to the same on both ends then you _must_ set explicit to true (the default), which turns off this bandwidth-saving feature.
 
 For the error-related options see the next section.
 
@@ -152,12 +152,15 @@ stream.on('error', function(err) {
 
 For streams returned via callbacks it will be auto-detected whether the stream is a readable, writable or duplex stream and both encoding and objectMode will be auto-detected and set correctly on both ends.
 
-For streams returned via synchronous-style calling there is no way to know in advance what the remote stream options are going to be. If you do not specify any options then the encoding and objectMode from the parent rpc-multistream options will be used. To explicitly specify:
+For streams returned via synchronous-style calling there is no way to know in advance what the remote stream options are going to be. If you do not specify any options then the encoding and objectMode from the parent rpc-multistream options will be used. Both `encoding` and `objectMode` can be explicitly specified on a per-stream basis like so:
 
 ```javascript
 var server = rpc({
   foo: rpc.syncReadStream(function() {
     return fs.createReadStream('foo.txt');
+  }, {
+    encoding: 'utf8',
+    objectMode: false
   })
 };
 ```
@@ -177,7 +180,6 @@ If using synchronous calls then both RPC server and client cannot be in the same
 
 # ToDo
 
-* Make sure the 'explicit' option works.
 * Automatically close irrelevant ends of read/write streams
 
 * More examples:

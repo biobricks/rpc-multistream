@@ -114,7 +114,7 @@ function rpcMultiStream(methods, opts) {
         detectStreamType: true, // detect if streams are readable/writeable/duplex
         encoding: 'utf8', // default encoding for streams
         objectMode: false, // default objectMode for streams
-        explicit: false, // include encoding/objectMode even if they match defaults
+        explicit: true, // include encoding/objectMode even if they match defaults
         debug: false,
         flattenError: flattenError,
         expandError: expandError,
@@ -358,7 +358,7 @@ function rpcMultiStream(methods, opts) {
             // duplex-json-stream throws an error when stream is closed
             // if no error handler is set.
             // What's the proper way of dealing with this?
-            // pump everything so errors propagate?
+            // pump everything so errors propagate? or just manually propagate
             stream.on('error', function(err) {}); 
         }
         return stream;
