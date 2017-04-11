@@ -18,7 +18,7 @@ var jsonStream = require('duplex-json-stream');
   
   ['functionNameOrCallbackId', [functionArgs], {indexOfCallbackArg1: 'callback1Id', indexOfCallbackArg2: 'callback2Id'}, {indexOfStreamArg1: stream1Identifier, indexOfStreamArg2: stream2Identifier}, returnStreamIdenfifier]
  
-  Everything after functionNameOrCallbackId is optional but position in the array is important. So you can do [val1, val2] and leave out the rest but not [val1, val2, val4] without doing [val1, val2, null, val4].
+  Everything after functionNameOrCallbackId is optional but position in the array is important. So you can do [val1, val2] and leave out the rest but not [val1, val2, val4] without doing [val1, val2, undefined, val4].
 
   returnStreamIdentifier can also be an array if you plan to return multiple streams using synchronous calling.
 
@@ -198,7 +198,7 @@ function rpcMultiStream(methods, opts) {
         if(typeof desc[0] === 'boolean') {
             sopts.objectMode = desc[0];
         }
-        if(typeof desc[1] === 'string') {
+        if(typeof desc[1] !== 'undefined') {
             sopts.encoding = desc[1];
         }
         if(!id) throw new Error("Non-numeric stream id");
@@ -346,8 +346,7 @@ function rpcMultiStream(methods, opts) {
         // TODO close unused end of non-duplex streams
         // remember that type can be 'd' or 'duplex' etc.
         var stream = multiplex.createSharedStream(id, opts);
-        if(opts.encoding || opts.objectMode) {
-            opts.encoding = opts.encoding || 'utf8';
+        if(opts.encoding) {
             stream.setEncoding(opts.encoding);
             stream.setDefaultEncoding(opts.encoding);
         }
@@ -360,6 +359,7 @@ function rpcMultiStream(methods, opts) {
             }); 
             return jstream;
         }
+
         return stream;
     };
 
@@ -395,7 +395,7 @@ function rpcMultiStream(methods, opts) {
             sopts.objectMode = true;
             sopts.encoding = 'utf8';
         } else {
-            sopts.encoding = state.encoding || opts.encoding;
+            sopts.encoding = ('encoding' in state) ? state.encoding : opts.encoding;
             sopts.objectMode = false
         }
         return sopts;
@@ -472,13 +472,14 @@ function rpcMultiStream(methods, opts) {
         for(i=0; i < streamOpts.length; i++) {
             sopts = {
                 objectMode: (typeof streamOpts[i].objectMode === 'boolean') ? streamOpts[i].objectMode : opts.objectMode,
-                encoding: streamOpts[i].encoding || opts.encoding
+                encoding: ('encoding' in streamOpts[i]) ? streamOpts[i].encoding : opts.encoding
             };
             type = streamOpts[i].type || 'd';
 
             ids.push(streamIdentifier(streamCount, type, sopts));
 
             stream = makeStream(streamCount, type, sopts);
+
             retStreams.push(stream);
             streams[streamCount] = stream;
 
@@ -515,10 +516,12 @@ function rpcMultiStream(methods, opts) {
                 }
                 if(!cbMapping) msg.push({});
                 if(!streamMapping) msg.push({});
+
                 var ret = registerReturnStreams(retStreamOpts);
                 msg.push(ret.ids);
                 debug("sending on rpcStream:", typeof msg, msg);
                 rpcStream.write(msg);
+
                 return ret.streams;
             }
                 debug("sending on rpcStream:", typeof msg, msg);

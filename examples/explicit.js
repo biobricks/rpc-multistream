@@ -5,10 +5,8 @@
 
 var fs = require('fs');
 var from = require('from2');
-
 var rpc = require('../index.js');
 
-var outFile = "/tmp/test.out";
 
 var server = rpc({
   
