@@ -180,17 +180,28 @@ If using synchronous calls then both RPC server and client cannot be in the same
 
 # ToDo
 
+* Implement opts.detectEncoding and opts.detectStreamType
 * Automatically close irrelevant ends of read/write streams
+* Use pump everywhere instead of .pipe
 
-* More examples:
+## More examples
+
 * Multiple-callbacks per call
 * Binary stream
 * Async call with multiple streams + client sending stream to server
 * Calling remote callbacks from remote callbacks (turtles)
 
+## Ideas for future versions
+
+* Add heartbeat feature
+* Automatic reconnect (better to make this its own module)
+* Backpressure support
+
 # Copyright and license
 
-Copyright (c) 2014, 2015 Marc Juul <juul@sudomesh.org>
+Copyright 2014, 2015 Marc Juul <npm@juul.io>
 
-License: AGPLv3 (will probably change to MIT soon)
+Copyright 2016, 2017 BioBrick Foundation
+
+License: AGPLv3
 

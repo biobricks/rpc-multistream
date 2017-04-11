@@ -28,7 +28,6 @@ client.on('methods', function(methods) {
     // this function has no way of reporting errors 
     // other than to emit a general error on the 'client' stream
     // (see below)
-//    methods.bad();
 
 });
 
