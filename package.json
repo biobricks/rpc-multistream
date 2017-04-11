@@ -1,6 +1,6 @@
 {
   "name": "rpc-multistream",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "rpc that can return streams using both async and sync calling",
   "homepage": "http://github.com/biobricks/rpc-multistream",
   "repository": {
