@@ -28,6 +28,7 @@
     "test": "node_modules/.bin/tape tests/*.js"
   },
   "devDependencies": {
-    "from2": "^2.3.0"
+    "from2": "^2.3.0",
+    "tape": "^4.6.3"
   }
 }
