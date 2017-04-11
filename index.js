@@ -352,14 +352,13 @@ function rpcMultiStream(methods, opts) {
             stream.setDefaultEncoding(opts.encoding);
         }
         if(opts.objectMode) {
-            stream = jsonStream(stream);
+            var jstream = jsonStream(stream);
 
-            // ToDo 
-            // duplex-json-stream throws an error when stream is closed
-            // if no error handler is set.
-            // What's the proper way of dealing with this?
-            // pump everything so errors propagate? or just manually propagate
-            stream.on('error', function(err) {}); 
+            // forward error
+            jstream.on('error', function(err) {
+              stream.emit('error', err);
+            }); 
+            return jstream;
         }
         return stream;
     };
