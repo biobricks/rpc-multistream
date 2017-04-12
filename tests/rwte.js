@@ -2,6 +2,7 @@ var fs = require('fs')
 var rpc = require('../')
 var test = require('tape')
 var through = require('through2');
+var tmp = require('tmp')
 
 // tape test for rpc-multistream functionality:
 // multiple streams:
@@ -41,16 +42,13 @@ test('rwte', function (t) {
             t.equal(data,"I am the contents of foo.txt :)\n","foo creatReadStream foo.txt")
         })
 
-        var outFile = "/tmp/test.out"
-        var outStream = methods.bar(outFile);
+        var tmpfile = tmp.fileSync()
+        var outStream = methods.bar(tmpfile.name);
         outStream.write("Love!\n");
         outStream.end();
-        fs.readFile(outFile, 'utf8', function(err,data) {
+        fs.readFile(tmpfile.name, 'utf8', function(err,data) {
             if (err) t.fail(err)
-            t.equal(data,"Love!\n","bar creatwritestream /tmp/test.out")
-            fs.unlink(outFile, function(err) {
-                if (err) t.fail(err)
-            })
+            t.equal(data,"Love!\n","bar creatwritestream tmpfile")
         })
 
         var duplexStream = methods.baz()
