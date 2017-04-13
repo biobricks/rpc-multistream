@@ -379,14 +379,14 @@ function rpcMultiStream(methods, opts) {
             if(type === 'r') {
               // TODO switch to pump
               rs.pipe(retStream);
-              // pump(ret[i], retStreams[i]);
+              // pump(rs, retStream);
             } else if(type === 'w') {
               retStream.pipe(rs);
 
-              // pump(retStreams[i], ret[i]);
+              // pump(retStream, rs);
             } else { // duplex
               rs.pipe(retStream).pipe(rs);
-              // pump(ret[i], retStreams[i], ret[i]);
+              // pump(rs, retStream, rs);
             }
             i++;
             cb();
