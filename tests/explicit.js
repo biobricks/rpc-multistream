@@ -6,7 +6,7 @@ var test = require('tape-catch')
 // tape test for rpc-multistream functionality:
 // opts.explicit
 
-test('opts.explicit', function (t) {
+test('opts.explicit.on', function (t) {
     var server = rpc({
         foo: rpc.syncReadStream(function() {
             return fs.createReadStream('tests/foo.txt', {encoding: 'utf8'});
@@ -22,12 +22,12 @@ test('opts.explicit', function (t) {
         }, { objectMode: true }) // bar is objectMode
     }, { objectMode: false }); // foo is not
     t.plan(5)
-    var explicit_client = rpc(undefined, {
+    var client = rpc(undefined, {
         objectMode: true, // different default than the server
         explicit: true // with explicit set it doesn't matter if defaults differ
     });
-    explicit_client.pipe(server).pipe(explicit_client);
-    explicit_client.on('methods', function(methods) {
+    client.pipe(server).pipe(client);
+    client.on('methods', function(methods) {
         t.equal(typeof methods.foo, 'function', 'explicit client: methods.foo is a function')
         t.equal(typeof methods.bar, 'function', 'explicit client: methods.bar is a function')
 
