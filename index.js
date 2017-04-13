@@ -4,6 +4,7 @@ var pump = require('pump');
 var Multiplex = require('multiplex');
 var uuid = require('uuid').v4;
 var xtend = require('xtend');
+var async = require('async');
 var jsonStream = require('duplex-json-stream');
 
 /*
@@ -99,6 +100,7 @@ function expandError(err) {
   if (!err || !err._isErrorObject) return err
   var err2 = new Error(err.message);
   for(var k in err) {
+    if(k === '_isErrorObject') continue;
     err2[k] = err[k]
   }
   return err2;
@@ -182,8 +184,7 @@ function rpcMultiStream(methods, opts) {
     if(!(data instanceof Array) || data.length < 1) {
       return cb();
     }
-    handleRPC(data)
-    cb();
+    handleRPC(data, cb);
   }), function(err) {
     multiplex.emit('error', err);
   });
@@ -224,7 +225,7 @@ function rpcMultiStream(methods, opts) {
     }
   }
 
-  function streamFromDesc(desc) {
+  function streamFromDesc(desc, functionName) {
     desc = desc.slice(0); // clone
     var id;
     var sopts = {
@@ -243,7 +244,18 @@ function rpcMultiStream(methods, opts) {
       sopts.encoding = desc[1];
     }
     if(!id) throw new Error("Non-numeric stream id");
-    return makeStream(id, type, sopts);
+    var rs = makeStream(id, type, sopts);
+
+    rs.on('error', function(err) {
+      if(err.message.match(/^channel destroyed/i)) return;
+
+      if(typeof opts.flattenError === 'function') {
+        err = opts.flattenError(err);
+      }
+      metaStream.write(['streamError', {streamId: id, err: err}]);
+    });
+
+    return rs;
   }
 
   function restoreStreamArgs(args, streamDescs) {
@@ -279,7 +291,7 @@ function rpcMultiStream(methods, opts) {
     console.log.apply(console, args);
   }
 
-  function handleRPC(data) {
+  function handleRPC(data, cb) {
     debug("receiving on rpcStream:", data);
     var fn;
     var cbi = parseInt(data[0]);
@@ -295,9 +307,39 @@ function rpcMultiStream(methods, opts) {
     var cbArgs = data[2];
     var streamArgs = data[3];
     var retStreamDescs = data[4];
-
     var retStreams;
-    var i;
+
+    function handleError(err) {
+      // if last argument is a function then assume it's the main callback
+      // and call it with the error as only argument
+      if(args.length && typeof args[args.length-1] === 'function') {
+        if(typeof opts.flattenError === 'function') {
+          err = opts.flattenError(err);
+        }
+        args[args.length-1].call(methods, err);
+
+        // if we have at least one stream then we use that to report the error
+      } else if(retStreams && retStreams.length) { 
+        if(typeof opts.flattenError === 'function') {
+          err = opts.flattenError(err);
+        }
+        var reported = false;
+        var streamId;
+        if(!retStreams) return cb(err);
+
+        for(i=0; i < retStreams.length; i++) {
+          streamId = retStreamDescs[i][0];
+          metaStream.write(['streamError', {streamId: streamId, functionName: name, err: err}]);
+          // destroy streams that didn't get connected
+          if(!ret || !ret[i]) {
+            retStreams[i].destroy();
+          }
+        }
+      } else {
+        uncaughtError(err, name);
+      }
+      cb(err);
+    }
 
     try {
       // expand errors only for first argument to callback
@@ -321,53 +363,44 @@ function rpcMultiStream(methods, opts) {
       if(!(ret instanceof Array)) ret = [ret];
 
       if(retStreams) {
-        var type;
-        for(i=0; i < retStreams.length; i++) {
-          if(!ret[i]) continue;
+        var type, rs;
+        var i = 0;
+        async.eachSeries(retStreams, function(retStream, cb) {
+          try {
 
-          type = retStreamDescs[i][1];
-          if(type === 'r') {
-            // TODO switch to pump
-            ret[i].pipe(retStreams[i]);
-            // pump(ret[i], retStreams[i]);
-          } else if(type === 'w') {
-            retStreams[i].pipe(ret[i]);
-            // pump(retStreams[i], ret[i]);
-          } else { // duplex
-            ret[i].pipe(retStreams[i]).pipe(ret[i]);
-            // pump(ret[i], retStreams[i], ret[i]);
+            rs = ret[i];
+            if(!rs) return cb();
+
+            rs.on('error', function(err) {
+              retStream.emit('error', err);
+            });
+
+            type = retStreamDescs[i][1];
+            if(type === 'r') {
+              // TODO switch to pump
+              rs.pipe(retStream);
+              // pump(ret[i], retStreams[i]);
+            } else if(type === 'w') {
+              retStream.pipe(rs);
+
+              // pump(retStreams[i], ret[i]);
+            } else { // duplex
+              rs.pipe(retStream).pipe(rs);
+              // pump(ret[i], retStreams[i], ret[i]);
+            }
+            i++;
+            cb();
+
+          } catch(err) {
+            handleError(err);
           }
-        }
+        }, function(err) {
+          if(err) return handleError(err);
+        });
       }
 
     } catch(err) {
-      // if last argument is a function then assume it's the main callback
-      // and call it with the error as only argument
-      if(args.length && typeof args[args.length-1] === 'function') {
-        if(typeof opts.flattenError === 'function') {
-          err = opts.flattenError(err);
-        }
-        args[args.length-1].call(methods, err);
-
-        // if we have at least one stream then we use that to report the error
-      } else if(retStreams && retStreams.length) { 
-        if(typeof opts.flattenError === 'function') {
-          err = opts.flattenError(err);
-        }
-        var reported = false;
-        var streamId;
-        for(i=0; i < retStreams.length; i++) {
-          streamId = retStreamDescs[i][0];
-          metaStream.write(['streamError', {streamId: streamId, functionName: name, err: err}]);
-          // destroy streams that didn't get connected
-          if(!ret || !ret[i]) {
-            retStreams[i].destroy();
-          }
-        }
-      } else {
-        uncaughtError(err, name);
-      }
-      return;
+      handleError(err);
     }
   }
 
@@ -387,6 +420,7 @@ function rpcMultiStream(methods, opts) {
     // TODO close unused end of non-duplex streams
     // remember that type can be 'd' or 'duplex' etc.
     var stream = multiplex.createSharedStream(id, opts);
+
     if(opts.encoding) {
       stream.setEncoding(opts.encoding);
       stream.setDefaultEncoding(opts.encoding);

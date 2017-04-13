@@ -18,11 +18,14 @@ var server = rpc({
   // function returning an object read stream
   bar: rpc.syncReadStream(function() {
     var i = 0;
-    return from.obj(function(size, next) {
+    var s = from.obj(function(size, next) {
       if(i++) return next(null, null);
       next(null, {
         hoopy: 'frood'
       });
+    });
+    s.on('error', function(err) {
+      console.log(err);
     });
   }, {
     objectMode: true // explicitly specify that this stream is objectMode
@@ -43,10 +46,16 @@ client.on('methods', function(methods) {
   var stringStream = methods.foo();
   stringStream.pipe(process.stdout);
   
+  stringStream.on('error', function(err) {
+    console.log("stringStream error:", err);
+  });
+
   var objStream = methods.bar();
+
   objStream.on('data', function(data) {
 
     console.log("got", typeof data, ':', data);
 
   });
+
 });
