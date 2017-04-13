@@ -1,7 +1,7 @@
 var from = require('from2');
 var fs = require('fs')
 var rpc = require('../')
-var test = require('tape')
+var test = require('tape-catch')
 
 // tape test for rpc-multistream functionality:
 // opts.explicit
