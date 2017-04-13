@@ -171,21 +171,20 @@ function rpcMultiStream(methods, opts) {
     }
   });
 
-  // TODO any reason we can't just use .on('data') and .on('error') here?
-  pump(metaStream, through.obj(function(data, enc, cb) {
-    handleMeta(data);
-    cb();
-  }), function(err) {
+  metaStream.on('data', handleMeta);
+
+  metaStream.on('error', function(err) {
     multiplex.emit('error', err);
   });
 
-  // TODO any reason we can't just use .on('data') and .on('error') here?
-  pump(rpcStream, through.obj(function(data, enc, cb) {
+  rpcStream.on('data', function(data) {
     if(!(data instanceof Array) || data.length < 1) {
-      return cb();
+      return;
     }
-    handleRPC(data, cb);
-  }), function(err) {
+    handleRPC(data);
+  });
+
+  rpcStream.on('error', function(err) {
     multiplex.emit('error', err);
   });
 
@@ -291,7 +290,7 @@ function rpcMultiStream(methods, opts) {
     console.log.apply(console, args);
   }
 
-  function handleRPC(data, cb) {
+  function handleRPC(data) {
     debug("receiving on rpcStream:", data);
     var fn;
     var cbi = parseInt(data[0]);
@@ -325,7 +324,7 @@ function rpcMultiStream(methods, opts) {
         }
         var reported = false;
         var streamId;
-        if(!retStreams) return cb(err);
+        if(!retStreams) return; // TODO error here?
 
         for(i=0; i < retStreams.length; i++) {
           streamId = retStreamDescs[i][0];
@@ -338,7 +337,6 @@ function rpcMultiStream(methods, opts) {
       } else {
         uncaughtError(err, name);
       }
-      cb(err);
     }
 
     try {
@@ -692,6 +690,7 @@ function rpcMultiStream(methods, opts) {
   };
   
   // stop sending heartbeat requests
+  // and don't emit any "death" events 
   multiplex.die = function() {
     opts.heartbeat = undefined;
   };
