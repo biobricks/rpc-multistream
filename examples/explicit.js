@@ -27,6 +27,7 @@ var server = rpc({
     s.on('error', function(err) {
       console.log(err);
     });
+    return s;
   }, {
     objectMode: true // explicitly specify that this stream is objectMode
   })
