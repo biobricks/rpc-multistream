@@ -17,12 +17,12 @@ test('asyncStream', function (t) {
             cb(null, w)
         },
         bar: function(cb) {
-            var r = fs.createReadStream('foo.txt', {encoding: 'utf8'})
+            var r = fs.createReadStream('tests/foo.txt', {encoding: 'utf8'})
             cb(null, "bar says hi", r)
         },
         baz: function(cb) {
             var w = fs.createWriteStream(bazfile.name, {encoding: 'utf8'})
-            var r = fs.createReadStream('foo.txt', {encoding: 'utf8'})
+            var r = fs.createReadStream('tests/foo.txt', {encoding: 'utf8'})
             cb(null, r, w, {chiao: "hiya!"})
         },
         duper: function(cb) {
@@ -35,7 +35,7 @@ test('asyncStream', function (t) {
     })
     var client = rpc()
     client.pipe(server).pipe(client)
-    t.plan(7)
+    t.plan(9)
     client.on('methods', function(methods) {
         methods.foo(function(err, w) {
             t.pass("foo")
@@ -49,19 +49,13 @@ test('asyncStream', function (t) {
         methods.bar(function(err, msg, r) {
             t.equal(msg,"bar says hi","bar")
             r.on('data', function(data) {
-//                t.equal(data,"I am the contents of foo.txt :)","bar foo.txt")
-            })
-            r.on('error',function(err) {
-                console.log("bar err: " + err)
+                t.equal(data,"I am the contents of foo.txt :)\n","bar foo.txt")
             })
         })
         methods.baz(function(err, r, w, msg) {
             t.deepEqual(msg,{chiao:'hiya!'},"baz chiao")
             r.on('data', function(data) {
-//                t.equal(data,"I am the contents of foo.txt :)","baz foo.txt")
-            })
-            r.on('error',function(err) {
-                console.log("baz err: " + err)
+                t.equal(data,"I am the contents of foo.txt :)\n","baz foo.txt")
             })
             w.write("a treat for your tummy!")
             w.end()
