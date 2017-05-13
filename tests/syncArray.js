@@ -1,10 +1,13 @@
 var fs = require('fs')
 var rpc = require('../')
 var test = require('tape')
+var tmp = require('tmp')
 
 // remote functions that return multiple streams as an array
 
 test('syncArray', function (t) {
+    tmp.setGracefulCleanup()
+    var rwfile = tmp.fileSync()
     var server = rpc({
         multiRead: rpc.syncReadStream(function() { return [
             fs.createReadStream('tests/foo.txt', {encoding: 'utf8'}),
@@ -12,7 +15,7 @@ test('syncArray', function (t) {
         ]}, 2),
         multiRW: rpc.syncStream(function() { return [
             fs.createReadStream('tests/foo.txt', {encoding: 'utf8'}),
-            fs.createWriteStream('/tmp/foo', {encoding: 'utf8'})
+            fs.createWriteStream(rwfile.name, {encoding: 'utf8'})
         ]}, [{
             type: 'read',
             encoding: 'utf8',
@@ -25,7 +28,7 @@ test('syncArray', function (t) {
     })
     var client = rpc()
     client.pipe(server).pipe(client)
-    t.plan(3)
+    t.plan(4)
     client.on('methods', function(methods) {
         var streams = methods.multiRead()
         streams[0].on('data',function(data,err) {
@@ -42,6 +45,10 @@ test('syncArray', function (t) {
             if (err) t.fail("mysterious error C: " + err)
             t.equal(data,"I am the contents of foo.txt :)\n","multirw foo")
         })
-        rwStreams[1].write("I am the contents of /tmp/foo\n")
+        rwStreams[1].write("I am the contents of rwfile")
+        fs.readFile(rwfile.name,'utf8',function(err,data) {
+            if (err) t.fail("mysterious error D: " + err)
+            t.equal(data,"I am the contents of rwfile","multirw tmpfile")
+        })
     })
 })
