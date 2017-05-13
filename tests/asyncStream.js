@@ -2,22 +2,26 @@ var fs = require('fs')
 var path = require('path')
 var rpc = require('../')
 var test = require('tape')
+var tmp = require('tmp')
 var through = require('through2')
 
 // asynchronous remote functions that return streams
 
 test('asyncStream', function (t) {
+    tmp.setGracefulCleanup()
+    var foofile = tmp.fileSync()
+    var bazfile = tmp.fileSync()
     var server = rpc({
-        foo: function(filename, cb) {
-            var w = fs.createWriteStream(path.join('/tmp', filename), {encoding: 'utf8'})
+        foo: function(cb) {
+            var w = fs.createWriteStream(foofile.name, {encoding: 'utf8'})
             cb(null, w)
         },
         bar: function(cb) {
             var r = fs.createReadStream('foo.txt', {encoding: 'utf8'})
             cb(null, "bar says hi", r)
         },
-        baz: function(filename, cb) {
-            var w = fs.createWriteStream(path.join('/tmp', filename), {encoding: 'utf8'})
+        baz: function(cb) {
+            var w = fs.createWriteStream(bazfile.name, {encoding: 'utf8'})
             var r = fs.createReadStream('foo.txt', {encoding: 'utf8'})
             cb(null, r, w, {chiao: "hiya!"})
         },
@@ -31,12 +35,16 @@ test('asyncStream', function (t) {
     })
     var client = rpc()
     client.pipe(server).pipe(client)
-    t.plan(5)
+    t.plan(7)
     client.on('methods', function(methods) {
-        methods.foo('haha.txt', function(err, w) {
+        methods.foo(function(err, w) {
             t.pass("foo")
             w.write("woop!")
             w.end()
+            fs.readFile(foofile.name,'utf8',function(err,data) {
+                if (err) t.fail("mysterious error A: " + err)
+                t.equal(data,"woop!","foo file")
+            })
         })
         methods.bar(function(err, msg, r) {
             t.equal(msg,"bar says hi","bar")
@@ -47,7 +55,7 @@ test('asyncStream', function (t) {
                 console.log("bar err: " + err)
             })
         })
-        methods.baz('cookie-cat.txt', function(err, r, w, msg) {
+        methods.baz(function(err, r, w, msg) {
             t.deepEqual(msg,{chiao:'hiya!'},"baz chiao")
             r.on('data', function(data) {
 //                t.equal(data,"I am the contents of foo.txt :)","baz foo.txt")
@@ -57,6 +65,10 @@ test('asyncStream', function (t) {
             })
             w.write("a treat for your tummy!")
             w.end()
+            fs.readFile(bazfile.name,'utf8',function(err,data) {
+                if (err) t.fail("mysterious error B: " + err)
+                t.equal(data,"a treat for your tummy!","baz file")
+            })
         })
         methods.duper(function(err, dupStream) {
             t.pass("duper returned")
