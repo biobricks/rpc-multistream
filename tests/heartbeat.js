@@ -13,12 +13,16 @@ test('heartbeat', function (t) {
         maxMissedBeats: 2.5 // if we don't get a response in 1250 ms then die
     })
     client.pipe(server).pipe(client)
-    t.plan(4)
+    t.plan(3)
+    var heartBeatCount = 0;
     client.on('heartbeat', function(timeInMilliseconds) {
-        t.pass("Got heartbeat response at:", timeInMilliseconds)
+      heartBeatCount++;
+      if(heartBeatCount === 2) {
+        t.pass("Got at least two heartbeat responses");
+      }
     })
     client.on('death', function() {
-        t.pass("Server died (stopped responding to heartbeat requests)")
+        t.pass("Server died (stopped responding to heartbeat requests) after " + heartBeatCount + " heartbeats")
         t.end()
     })
     client.on('methods', function(methods) {
